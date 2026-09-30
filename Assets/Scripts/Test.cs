@@ -7,7 +7,7 @@ public class NewBehaviourScript : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        Debug.Log("TEsst ver1.1");
+        Debug.Log("关注塔菲喵，谢谢喵");
     }
 
     // Update is called once per frame
