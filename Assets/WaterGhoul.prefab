@@ -169,7 +169,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   rb: {fileID: 4248336262590301713}
   player: {fileID: 0}
-  speed: 30
+  speed: 2
 --- !u!58 &5992713018988026695
 CircleCollider2D:
   m_ObjectHideFlags: 0
