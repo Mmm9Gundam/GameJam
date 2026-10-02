@@ -3,21 +3,42 @@ using UnityEngine;
 namespace WaterSurvivor
 {
     /// <summary>
-    /// 初版测试用的场地生成器（纯代码，零美术资源）。
+    /// 测试场地生成器。**两条路都支持**，你挑一条用就行：
     ///
-    /// 和你们 NumberZuma 里 GameBootstrap 一个套路：
-    /// [RuntimeInitializeOnLoadMethod] 会在场景加载完之后自动执行，
-    /// 所以只要脚本编进工程，【在任意场景按 Play】就能直接玩 ——
-    /// 不用手动建物体、不用在 Inspector 里拖引用、不会有"资源丢失"。
+    /// 路线 A（现在默认的，最省事）：
+    ///   什么都不用做，在任意场景按 Play，它会自动生成
+    ///   相机 + 地板 + 玩家 + 一圈敌人。美术图会自动从
+    ///   Assets/Resources/Art/ 里读。
     ///
-    /// 生成内容：正交相机 + 地板 + 玩家（WASD 移动 / 左键连发水弹）+ 几个占位敌人。
+    /// 路线 B（推荐给要长期改的人）：用预制体
+    ///   1. 菜单 工具 → 水弹幸存者 → 生成预制体（Player / Enemy）
+    ///   2. 菜单 工具 → 水弹幸存者 → 生成测试场景（会自动摆好并引用预制体）
+    ///   之后你在 Project 窗口双击 Player 预制体，就能在 Inspector 里
+    ///   直接改图片、速度、碰撞体；场景里的对象也是普通 GameObject，
+    ///   可以随便拖、随便加组件。
     ///
-    /// 想改成手动摆：
-    ///   1. 把 GameConfig.AutoStart 改成 false
-    ///   2. 用菜单 工具 → 水弹幸存者 → 在当前场景生成测试对象
+    /// 两条路的关系：**Inspector 里填了预制体就走预制体，没填才代码生成**。
+    /// 走预制体时，本脚本不会覆盖你在 Inspector 里改的任何值。
     /// </summary>
     public class ArenaBootstrap : MonoBehaviour
     {
+        [Header("预制体（留空 = 用代码现场生成）")]
+        [Tooltip("玩家的预制体。拖 Assets/Prefabs/Player.prefab 到这里。")]
+        public GameObject playerPrefab;
+
+        [Tooltip("敌人的预制体。拖 Assets/Prefabs/Enemy.prefab 到这里。")]
+        public GameObject enemyPrefab;
+
+        [Header("开关")]
+        [Tooltip("按 Play 时是否自动生成场地。场景里已经摆好对象就关掉它。")]
+        public bool buildOnStart = true;
+
+        [Tooltip("是否生成一圈测试敌人。")]
+        public bool spawnEnemies = true;
+
+        [Tooltip("生成几个测试敌人。")]
+        public int enemyCount = 6;
+
         bool _built;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -32,7 +53,7 @@ namespace WaterSurvivor
 
         void Start()
         {
-            Build();
+            if (buildOnStart) Build();
         }
 
         /// <summary>把相机、地板、玩家、敌人一次性生成到当前场景（编辑器菜单也会调它）。</summary>
@@ -43,9 +64,10 @@ namespace WaterSurvivor
 
             SetupCamera();
             CreateFloor();
+
             GameObject player = CreatePlayer();
 
-            if (GameConfig.SpawnDummyEnemies) CreateEnemies(player.transform);
+            if (spawnEnemies && enemyCount > 0) CreateEnemies(player.transform);
 
             SimpleLog.Log("[启动] 就绪：WASD 移动，按住鼠标左键朝鼠标方向连发水弹；" +
                           "命中敌人或飞行 " + GameConfig.BulletLifetime.ToString("F1") + "s 后水弹销毁并记录日志。");
@@ -79,61 +101,34 @@ namespace WaterSurvivor
         }
 
         // ------------------------------------------------------------------
-        // 地板（只是给个视觉参照，没有碰撞体，不会挡住子弹）
+        // 地板（视觉参照，没有碰撞体，不会挡住子弹）
         // ------------------------------------------------------------------
         void CreateFloor()
         {
-            GameObject floor = SpriteFactory.SpawnSprite(
-                "Floor", SpriteFactory.Square, GameConfig.ColorFloor,
-                1f, Vector3.zero, -100);
-
-            // 方块精灵是 1x1，直接按竞技场尺寸拉伸
-            floor.transform.localScale = new Vector3(
-                GameConfig.ArenaHalfWidth * 2f,
-                GameConfig.ArenaHalfHeight * 2f,
-                1f);
+            ActorFactory.BuildFloor();
         }
 
         // ------------------------------------------------------------------
-        // 玩家
+        // 玩家：有预制体用预制体，没有就代码生成
         // ------------------------------------------------------------------
         GameObject CreatePlayer()
         {
-            GameObject player = SpriteFactory.SpawnSprite(
-                "Player", SpriteFactory.Circle, GameConfig.ColorPlayer,
-                GameConfig.PlayerRadius * 2f, Vector3.zero, 5);
+            if (playerPrefab != null)
+            {
+                GameObject prefabPlayer = Instantiate(playerPrefab, Vector3.zero, Quaternion.identity);
+                prefabPlayer.name = ActorFactory.PlayerName;
+                return prefabPlayer;   // 走预制体就不改它的任何 Inspector 值
+            }
 
-            Rigidbody2D rb = player.AddComponent<Rigidbody2D>();
-            rb.gravityScale = 0f;
-            rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
-
-            CircleCollider2D col = player.AddComponent<CircleCollider2D>();
-            col.radius = 0.5f;      // 精灵直径 1 单位 → 半径 0.5 刚好贴合
-
-            // 任务 1：WASD 移动
-            PlayerMove move = player.AddComponent<PlayerMove>();
-            move.moveSpeed = GameConfig.PlayerMoveSpeed;
-
-            // 任务 2：按住左键连发水弹
-            PlayerShooter shooter = player.AddComponent<PlayerShooter>();
-            shooter.fireInterval = GameConfig.FireInterval;
-            shooter.bulletSpeed = GameConfig.BulletSpeed;
-            shooter.bulletLifetime = GameConfig.BulletLifetime;
-            shooter.muzzleOffset = GameConfig.MuzzleOffset;
-
-            try { player.tag = "Player"; }
-            catch { /* "Player" 是引擎自带标签，正常不会失败；失败也不影响功能 */ }
-
-            return player;
+            return ActorFactory.BuildPlayer(Vector3.zero);
         }
 
         // ------------------------------------------------------------------
-        // 占位敌人：围着玩家撒一圈，方便马上打到
+        // 敌人：围着玩家撒一圈
         // ------------------------------------------------------------------
         void CreateEnemies(Transform player)
         {
-            int count = Mathf.Max(0, GameConfig.DummyEnemyCount);
-            if (count == 0) return;
+            int count = Mathf.Max(0, enemyCount);
 
             for (int i = 0; i < count; i++)
             {
@@ -145,39 +140,34 @@ namespace WaterSurvivor
                 pos.x = Mathf.Clamp(pos.x, -GameConfig.ArenaHalfWidth + 0.6f, GameConfig.ArenaHalfWidth - 0.6f);
                 pos.y = Mathf.Clamp(pos.y, -GameConfig.ArenaHalfHeight + 0.6f, GameConfig.ArenaHalfHeight - 0.6f);
 
-                GameObject enemy = SpriteFactory.SpawnSprite(
-                    "Enemy_" + i, SpriteFactory.Circle, GameConfig.ColorEnemy,
-                    0.7f, pos, 4);
+                GameObject enemy;
 
-                Rigidbody2D rb = enemy.AddComponent<Rigidbody2D>();
-                rb.gravityScale = 0f;
-                rb.freezeRotation = true;
-                rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
+                if (enemyPrefab != null)
+                {
+                    enemy = Instantiate(enemyPrefab, pos, Quaternion.identity);
+                }
+                else
+                {
+                    enemy = ActorFactory.BuildEnemy(pos, player);
 
-                CircleCollider2D col = enemy.AddComponent<CircleCollider2D>();
-                col.radius = 0.5f;
+                    // 代码生成时顺手确认一下标签，标签不对水弹就打不中
+                    if (!TagUtil.EnemyTagExists) return;
+                }
 
-                DummyEnemy dummy = enemy.AddComponent<DummyEnemy>();
-                dummy.target = player;
-                dummy.moveSpeed = 1.8f;
-
-                // 任务 4 的前提：敌人必须挂 "Enemy" 标签
-                if (!SetEnemyTag(enemy)) return;
+                enemy.name = "Enemy_" + i;
+                WireEnemyTarget(enemy, player);
             }
         }
 
-        static bool SetEnemyTag(GameObject go)
+        /// <summary>
+        /// 把"追谁"告诉敌人。这一步是必须的联动：
+        /// 预制体自己不知道场景里的玩家是谁，要在生成的时候牵线。
+        /// 以后你的敌人脚本不叫 DummyEnemy，只要也有 target 字段，在这里加一行即可。
+        /// </summary>
+        static void WireEnemyTarget(GameObject enemy, Transform player)
         {
-            if (!TagUtil.EnemyTagExists)
-            {
-                SimpleLog.Error("[启动] 没能给 " + go.name + " 设置 Enemy 标签，" +
-                                "水弹将无法判定命中。请先补上标签（菜单：工具 → 水弹幸存者 → 检查/补上 Enemy 标签）。");
-                return false;
-            }
-
-            // 标签确认存在后再赋值，这样不会抛异常
-            go.tag = GameConfig.EnemyTag;
-            return true;
+            DummyEnemy dummy = enemy.GetComponent<DummyEnemy>();
+            if (dummy != null) dummy.target = player;
         }
     }
 }
