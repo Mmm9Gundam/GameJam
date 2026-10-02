@@ -7,6 +7,6 @@ public class NewBehaviourScript : MonoBehaviour
     public void StartGame()
     {
         //跳转到GameScene
-        SceneManager.LoadScene("GameScene")
+        SceneManager.LoadScene("GameScene");
     }
 }
