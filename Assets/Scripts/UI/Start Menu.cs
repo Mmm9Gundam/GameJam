@@ -1,8 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.SceneManagement;
 using UnityEngine;
 
-public class NewBehaviourScript : MonoBehaviour
+public class StartMenu : MonoBehaviour
 {
     public void StartGame()
     {
